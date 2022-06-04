@@ -1,96 +1,78 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../../middleware/auth');
-const { check, validationResult } = require('express-validator');
-const config = require('config')
-const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const auth = require('../../middleware/auth');
+const jwt = require('jsonwebtoken');
+const config = require('config');
+const { check, validationResult } = require('express-validator');
 
+const User = require('../../models/User');
 
-const User = require('../../models/User')
-
-// @route GET api/auth
-// @desc Test route
-// @access Public
-router.get('/', auth, async (req,res) => {
-    try {
-        const user = await User.findById(req.user.id).select('-password');
-        res.json(user);
-    } catch(err){
-        console.log(err.message);
-        res.status(500).send('Server Error');
-    }
+// @route    GET api/auth
+// @desc     Get user by token
+// @access   Private
+router.get('/', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    res.json(user);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
 });
 
-// @route POST api/auth
-// @desc Authenticate user & get token
-// @access Public
-router.post('/', [ // contents should included in requests sent by users
-    check('email', 'Please include a valid email').isEmail(),
-    check(
-        'password',
-        'Password is required'
-    ).exists()
-],
-async (req,res) => {
-    //console.log(req.body);
+// @route    POST api/auth
+// @desc     Authenticate user & get token
+// @access   Public
+router.post(
+  '/',
+  check('email', 'Please include a valid email').isEmail(),
+  check('password', 'Password is required').exists(),
+  async (req, res) => {
     const errors = validationResult(req);
-    if(!errors.isEmpty()){
-        return res.status(400).json({ errors: errors.array() });
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
     }
 
     const { email, password } = req.body;
 
     try {
+      let user = await User.findOne({ email });
 
-        // See if user exists
-        let user = await User.findOne({ email });
+      if (!user) {
+        return res
+          .status(400)
+          .json({ errors: [{ msg: 'Invalid Credentials' }] });
+      }
 
-        if(!user){
-            return res
-            .status(400)
-            .json({ errors: [{msg: 'Invalid Credentials'}]}); 
-            // must be return... or an error happens: Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client
+      const isMatch = await bcrypt.compare(password, user.password);
+
+      if (!isMatch) {
+        return res
+          .status(400)
+          .json({ errors: [{ msg: 'Invalid Credentials' }] });
+      }
+
+      const payload = {
+        user: {
+          id: user.id
         }
+      };
 
-        const isMatch = await bcrypt.compare(password, user.password);
-
-        if(!isMatch){
-            return res
-            .status(400)
-            .json({ errors: [{msg: 'Password is wrong'}]}); 
+      jwt.sign(
+        payload,
+        config.get('jwtSecret'),
+        { expiresIn: '5 days' },
+        (err, token) => {
+          if (err) throw err;
+          res.json({ token });
         }
-
-        // Return jsonwebtoken
-        //res.send('User registered');
-        const payload = {
-            user: {
-                id: user.id
-            },
-            name: {
-                name: user.name
-            }
-        }
-
-        jwt.sign(
-            payload, 
-            config.get('jwtSecret'),
-            { expiresIn: 360000 },
-            (err, token) => {
-                if(err) throw err;
-                return res.json({ token });
-                // if want to send it, delete the last response
-            }
-        );
-
-    } catch(err) {
-        console.log(err.message);
-        return res.status(500).send('Server error');
-        
+      );
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send('Server error');
     }
-
-    
-    //res.send('User route');
-});
+  }
+);
 
 module.exports = router;
