@@ -1,0 +1,7 @@
+{
+    "mongoURI": "mongodb+srv://admin-jax:jax123@cluster0.svak9.mongodb.net/myFirstDatabase?retryWrites=true&w=majority",
+    "jwtSecret": "mysecrettoken",
+    "githubClientId": "e13f8e1057c92167152d",
+    "githubSecret": "652ef46734c955fa8a7a93c5834a4f9815eb1be0",
+    "githubToken": "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"
+}
